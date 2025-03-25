@@ -205,11 +205,10 @@ def check_read_crc_log(rados_object, init_time, end_time, pgid):
             f'awk \'$1 >= "{init_time}" && $1 <= "{end_time}"\' '
             f"/var/log/ceph/{fsid}/ceph-osd.{osd_id}.log"
         )
-        osd_logs, err = host.exec_command(
-            sudo=True,
-            cmd=cmd_get_log_lines,
-        )
+        osd_logs, err = host.exec_command(sudo=True, cmd=cmd_get_log_lines)
         osd_lines = osd_logs.splitlines()
+        msg_osd_log = f"The osd log lines are - {osd_lines}"
+        log.debug(msg_osd_log)
         for osd_line in osd_lines:
             if re.search(log_line, osd_line):
                 msg_err_msg = f" Found the error lines on OSD : {osd_id} and log line is {osd_line}"
