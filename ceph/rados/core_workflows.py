@@ -5454,12 +5454,30 @@ EOF"""
         Args:
             nodes_list: Cluster nodes list that remove the file content
             daemon_type: The daemon type like mon,mgr,osd
-        Returns: True -> Successful execution of command
-                 False -> Failure of command
+        Returns: Return tuple with two booleans
+                 1. True -> File exists in the node
+                    False-> File not exists in the node
 
         """
         cluster_fsid = self.run_ceph_command(cmd="ceph fsid")["fsid"]
         timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+
+        if daemon_type is None:
+            log_path = f"[ -d /var/log/ceph/{cluster_fsid} ]; echo$?"
+        else:
+            log_path = f"ls /var/log/ceph/{cluster_fsid}/ | grep -Eq '.*{daemon_type}.*.log$'; echo $?"
+        for node in nodes_list:
+            try:
+                out_put, err = node.exec_command(sudo=True, cmd=log_path)
+                if int(out_put) != 0:
+                    msg_error = (
+                        f"The log file path not exists in the node -{node.hostname} "
+                    )
+                    log.error(msg_error)
+                    return False
+            except Exception:
+                log.error("Error while checking the log file path")
+                return False
 
         if daemon_type is None:
             cmd_truncate = rf"""

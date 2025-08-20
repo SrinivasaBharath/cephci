@@ -103,9 +103,13 @@ def run(ceph_cluster, **kw):
         )
         # Perform the tests by modifying the
         mon_obj.set_config(section="osd", name="osd_scrub_load_threshold", value=0)
-
         # Truncate the osd logs
-        rados_object.remove_log_file_content(osd_nodes, daemon_type="osd")
+        truncate_log_check = rados_object.remove_log_file_content(
+            osd_nodes, daemon_type="osd"
+        )
+        if not truncate_log_check:
+            log.error("Scenario1: The truncation of the log files are failed")
+            return 1
         log.info("Scenario1: The content of osd log are removed")
 
         # set the debug log to 20
@@ -199,6 +203,14 @@ def run(ceph_cluster, **kw):
             cmd="sudo date '+%Y-%m-%dT%H:%M:%S.%3N+0000'"
         )
         init_time = init_time.strip()
+        truncate_log_check = rados_object.remove_log_file_content(
+            osd_nodes, daemon_type="osd"
+        )
+        if not truncate_log_check:
+            log.error("Scenario1: The truncation of the log files are failed")
+            return 1
+        log.info("Scenario2: The content of osd log are removed")
+
         configure_log_level(mon_obj, acting_pg_set, set_to_default=False)
 
         chk_auto_repair_param = set_auto_repair_parameters(
@@ -229,7 +241,7 @@ def run(ceph_cluster, **kw):
             return 1
 
         configure_log_level(mon_obj, acting_pg_set, set_to_default=True)
-        log.info("Scenario2: The osd and mgr logs are set to default value")
+        log.info("Scenario2: The osd  logs are set to default value")
         end_time, _ = installer.exec_command(
             cmd="sudo date '+%Y-%m-%dT%H:%M:%S.%3N+0000'"
         )
