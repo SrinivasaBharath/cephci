@@ -3,12 +3,12 @@ This file contains the  methods to generate inconsistent objects, collect the OS
  and then change the epoch to check if the inconsistency persists.
 """
 
-import random
 import traceback
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.bluestoretool_workflows import BluestoreToolWorkflows
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.objectstoretool_workflows import objectstoreToolWorkflows
 from ceph.rados.pool_workflows import PoolFunctions
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from utility.log import Log
@@ -30,61 +30,29 @@ def run(ceph_cluster, **kw):
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
     pool_obj = PoolFunctions(node=cephadm)
+    objectstore_obj = objectstoreToolWorkflows(node=cephadm, nostart=True)
     bluestore_obj = BluestoreToolWorkflows(node=cephadm)
-    pool_target_configs = config["verify_osd_omap_entries"]["configurations"]
-    omap_target_configs = config["verify_osd_omap_entries"]["omap_config"]
+    pool_name = config["pool_name"]
+
     try:
         method_should_succeed(
             rados_obj.create_pool,
-            **pool_target_configs,
+            **config,
         )
-        pool_name = pool_target_configs["pool_name"]
+
         log.info(f"Created the pool {pool_name} to generate inconsistent objects")
-
-        # Creating omaps
-        if not pool_obj.fill_omap_entries(pool_name=pool_name, **omap_target_configs):
-            log.error(f"Omap entries not generated on pool {pool_name}")
-            return 1
-        log.debug("Completed writing omap entries onto the pool")
-
-        # Fetching all objects and selecting one object to generate inconsistency
-        obj_list = rados_obj.get_object_list(pool_name)
-        log.debug(f"All the objects added onto the pool are : {obj_list}")
-
-        oname_list = random.choices(obj_list, k=10)
-        log.debug(
-            f"Selected objects {oname_list} at random to generate inconsistent objects."
+        obj_pg_map = rados_obj.create_inconsistent_object(
+            objectstore_obj, pool_name, no_of_objects=1
         )
-        inconsistent_obj_count = 0
-        for oname in oname_list:
-            primary_osd = rados_obj.get_osd_map(pool=pool_name, obj=oname)[
-                "acting_primary"
-            ]
-            log.debug(f"The object stored in the primary osd number-{primary_osd}")
-
-            # getting the OSD epoch before generating inconsistent objects
-            epoch_cmd = "ceph osd dump"
-            init_epoch = rados_obj.run_ceph_command(cmd=epoch_cmd)["epoch"]
-            log.info(f"Initial epoch before generating inconsistency is {init_epoch}")
-
-            # Create inconsistency objects
-            try:
-                pg_id = rados_obj.create_inconsistent_object(pool_name, oname)
-                inconsistent_obj_count = inconsistent_obj_count + 1
-            except Exception as err:
-                log.error(
-                    f"Failed to generate inconsistent object.Trying to convert another object. Error : {err}"
-                )
-                continue
-            if inconsistent_obj_count == 1:
-                log.info(f"The inconsistent object is created in the PG - {pg_id}")
-                break
-        if inconsistent_obj_count == 0:
-            log.error(
-                "The inconsistent object is  not created.Not performing the further tests"
-            )
-            return 1
-
+        pg_id = list(set(obj_pg_map.values()))[0]
+        oname = list(obj_pg_map.keys())[0]
+        msg_pgid = (
+            f"The inconsistent object created in{pg_id} pg and the pool is {pool_name}"
+        )
+        log.info(msg_pgid)
+        msg_obj = f"The objects in the {pool_name} pool is - {list(obj_pg_map.keys())}"
+        log.info(msg_obj)
+        epoch_cmd = "ceph osd dump"
         # Checking for inconsistency in the PG list
         inconsistent_pg_list = rados_obj.get_inconsistent_pg_list(pool_name)
         if any(pg_id in search for search in inconsistent_pg_list):
@@ -95,6 +63,8 @@ def run(ceph_cluster, **kw):
 
         epoch_incon = rados_obj.run_ceph_command(cmd=epoch_cmd)["epoch"]
         log.info(f"OSD epoch when Inconsistent object is generated : {epoch_incon}")
+
+        primary_osd = rados_obj.get_osd_map(pool=pool_name, obj=oname)["acting_primary"]
 
         log.debug(
             f"Marking the primary OSD with inconsistency, OSD.{primary_osd} down and out"
@@ -151,9 +121,8 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         log.info("------------Execution of finally block-----------------")
-        if config.get("delete_pool"):
-            method_should_succeed(rados_obj.delete_pool, pool_name)
-            log.info("deleted the pool successfully")
+        method_should_succeed(rados_obj.delete_pool, pool_name)
+        log.info("deleted the pool successfully")
         if "primary_osd" in locals() or "primary_osd" in globals():
             rados_obj.change_osd_state(action="start", target=primary_osd)
         rados_obj.run_ceph_command(cmd=f"ceph osd in {primary_osd}")
