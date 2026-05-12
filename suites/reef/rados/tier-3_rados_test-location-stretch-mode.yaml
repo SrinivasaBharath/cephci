@@ -24,6 +24,7 @@ tests:
           registry-json: registry.redhat.io
           mon-ip: node1
           orphan-initial-daemons: true
+          skip-monitoring-stack: true
           skip-dashboard: true
           ssh-user: cephuser
           apply-spec:
@@ -160,6 +161,21 @@ tests:
       config:
         log_to_file: true
       desc: Change config options to enable logging to file
+
+  - test:
+      name: Upgrade cluster to 7.1z9 Hotfix ceph version
+      desc: Upgrade cluster to 7.1z9 Hotfix version
+      module: test_upgrade_warn.py
+      polarion-id: CEPH-83574934
+      config:
+        command: start
+        service: upgrade
+        base_cmd_args:
+          verbose: true
+        args:
+          rhcs-version: 7.1
+          release: z9_proximus_hotfix
+      abort-on-fail: true
 
 # RHOS-d run duration: 18 min
 # env: VM + BM

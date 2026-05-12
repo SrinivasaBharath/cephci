@@ -240,9 +240,9 @@ class CephAdmin(BootstrapMixin, ShellMixin, RegistryLoginMixin):
 
         :Note: At present, they are prefixed with -- hence use long options
         """
-        cmd = "yum -y install cephadm"
-        if kwargs.get("rpm_version", None):
-            cmd = f"{cmd}-{kwargs['rpm_version']}"
+        cmd = "yum -y install 'cephadm-2:18.2.1-298.1.hotfix.bz2359773*'"
+        # if kwargs.get("rpm_version", None):
+        #     cmd = f"{cmd}-{kwargs['rpm_version']}"
 
         if kwargs.get("nogpgcheck", True):
             cmd += " --nogpgcheck"

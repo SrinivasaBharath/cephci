@@ -30,6 +30,7 @@ tests:
                 mon-ip: node1
                 orphan-initial-daemons: true
                 allow-fqdn-hostname: true
+                skip-monitoring-stack: true
           - config:
               command: add_hosts
               service: host
